@@ -34,7 +34,7 @@ func init() {
 
 		// -----------------------------------------------------------
 
-		_, execerr := txApp.DB().NewQuery(`
+		collectionsSQL := `
 			CREATE TABLE {{_collections}} (
 				[[id]]         TEXT PRIMARY KEY DEFAULT ('r'||lower(hex(randomblob(7)))) NOT NULL,
 				[[system]]     BOOLEAN DEFAULT FALSE NOT NULL,
@@ -53,7 +53,11 @@ func init() {
 			);
 
 			CREATE INDEX IF NOT EXISTS idx__collections_type on {{_collections}} ([[type]]);
-		`).Execute()
+		`
+		// Translate SQL for the current database type
+		collectionsSQL = core.TranslateSQLForDB(collectionsSQL, txApp.DBType())
+		
+		_, execerr := txApp.DB().NewQuery(collectionsSQL).Execute()
 		if execerr != nil {
 			return fmt.Errorf("_collections exec error: %w", execerr)
 		}
@@ -105,14 +109,18 @@ func init() {
 }
 
 func createParamsTable(txApp core.App) error {
-	_, execErr := txApp.DB().NewQuery(`
+	paramsSQL := `
 		CREATE TABLE {{_params}} (
 			[[id]]      TEXT PRIMARY KEY DEFAULT ('r'||lower(hex(randomblob(7)))) NOT NULL,
 			[[value]]   JSON DEFAULT NULL,
 			[[created]] TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%fZ')) NOT NULL,
 			[[updated]] TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%fZ')) NOT NULL
 		);
-	`).Execute()
+	`
+	// Translate SQL for the current database type
+	paramsSQL = core.TranslateSQLForDB(paramsSQL, txApp.DBType())
+	
+	_, execErr := txApp.DB().NewQuery(paramsSQL).Execute()
 
 	return execErr
 }

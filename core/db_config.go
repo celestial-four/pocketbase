@@ -60,10 +60,13 @@ func (dc *DatabaseConfig) Validate() error {
 		// SQLite doesn't require URL (will use DataDir-based paths)
 		return nil
 	case DatabaseTypePostgreSQL:
-		// PostgreSQL support is not yet fully implemented
-		return fmt.Errorf("PostgreSQL support is currently experimental and not production-ready")
+		// PostgreSQL requires a connection URL
+		if dc.URL == "" {
+			return fmt.Errorf("PostgreSQL requires a connection URL (set PB_DB_URL environment variable or --dbURL flag)")
+		}
+		return nil
 	default:
-		return fmt.Errorf("unsupported database type: %s (supported: sqlite)", dc.Type)
+		return fmt.Errorf("unsupported database type: %s (supported: sqlite, postgres)", dc.Type)
 	}
 }
 

@@ -70,14 +70,24 @@ func TestDatabaseConfigValidate(t *testing.T) {
 		}
 	})
 
-	t.Run("PostgreSQL returns not implemented error", func(t *testing.T) {
+	t.Run("PostgreSQL is valid with URL", func(t *testing.T) {
 		config := &core.DatabaseConfig{
 			Type: core.DatabaseTypePostgreSQL,
 			URL:  "postgres://user:pass@localhost:5432/testdb",
 		}
+		if err := config.Validate(); err != nil {
+			t.Errorf("expected PostgreSQL config with URL to be valid, got error: %v", err)
+		}
+	})
+
+	t.Run("PostgreSQL requires URL", func(t *testing.T) {
+		config := &core.DatabaseConfig{
+			Type: core.DatabaseTypePostgreSQL,
+			URL:  "",
+		}
 		err := config.Validate()
 		if err == nil {
-			t.Error("expected PostgreSQL to return error (not implemented), got nil")
+			t.Error("expected PostgreSQL without URL to return error, got nil")
 		}
 	})
 

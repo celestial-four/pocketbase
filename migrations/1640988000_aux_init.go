@@ -7,7 +7,7 @@ import (
 func init() {
 	core.SystemMigrations.Add(&core.Migration{
 		Up: func(txApp core.App) error {
-			_, execErr := txApp.AuxDB().NewQuery(`
+			logsSQL := `
 				CREATE TABLE IF NOT EXISTS {{_logs}} (
 					[[id]]      TEXT PRIMARY KEY DEFAULT ('r'||lower(hex(randomblob(7)))) NOT NULL,
 					[[level]]   INTEGER DEFAULT 0 NOT NULL,
@@ -18,8 +18,23 @@ func init() {
 
 				CREATE INDEX IF NOT EXISTS idx_logs_level on {{_logs}} ([[level]]);
 				CREATE INDEX IF NOT EXISTS idx_logs_message on {{_logs}} ([[message]]);
-				CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (strftime('%Y-%m-%d %H:00:00', [[created]]));
-			`).Execute()
+			`
+			// Translate SQL for the current database type
+			logsSQL = core.TranslateSQLForDB(logsSQL, txApp.DBType())
+			
+			_, execErr := txApp.AuxDB().NewQuery(logsSQL).Execute()
+			if execErr != nil {
+				return execErr
+			}
+			
+			// Create the hour index separately since it needs special handling for PostgreSQL
+			var indexSQL string
+			if txApp.DBType() == core.DatabaseTypePostgreSQL {
+				indexSQL = `CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (date_trunc('hour', [[created]]::timestamp))`
+			} else {
+				indexSQL = `CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (strftime('%Y-%m-%d %H:00:00', [[created]]))`
+			}
+			_, execErr = txApp.AuxDB().NewQuery(indexSQL).Execute()
 
 			return execErr
 		},

@@ -1,19 +1,29 @@
 package core
 
 import (
-	"fmt"
-
 	"github.com/pocketbase/dbx"
+
+	// Register pgx PostgreSQL driver
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // PostgreSQLDBConnect creates a PostgreSQL database connection.
 //
-// **WARNING: PostgreSQL support is currently experimental and not production-ready.**
-// This function is provided as a foundation for future PostgreSQL support.
-// It has not been thoroughly tested and may not work correctly with PocketBase's
-// data model, migrations, and SQLite-specific queries.
+// The dbURL should be a valid PostgreSQL connection string, e.g.:
+//   - "postgres://user:password@localhost:5432/dbname"
+//   - "postgres://user:password@localhost:5432/dbname?sslmode=disable"
+//   - "host=localhost port=5432 user=user password=password dbname=dbname sslmode=disable"
 //
-// Use at your own risk. For production use, stick with SQLite.
+// **WARNING: PostgreSQL support is experimental.**
+// While basic functionality is implemented, some advanced features may not work
+// as expected. Thoroughly test in a non-production environment first.
+//
+// For production use with simpler deployments, SQLite is still recommended.
 func PostgreSQLDBConnect(dbURL string) (*dbx.DB, error) {
-	return nil, fmt.Errorf("PostgreSQL support is not yet implemented - SQLite is the only supported database")
+	db, err := dbx.Open("pgx", dbURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }

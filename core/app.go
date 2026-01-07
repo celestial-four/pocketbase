@@ -73,6 +73,9 @@ type App interface {
 	// When enabled logs, executed sql statements, etc. are printed to the stderr.
 	IsDev() bool
 
+	// DBType returns the configured database type (sqlite or postgres).
+	DBType() DatabaseType
+
 	// Settings returns the loaded app settings.
 	Settings() *Settings
 
