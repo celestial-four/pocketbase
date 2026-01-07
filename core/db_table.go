@@ -10,10 +10,21 @@ import (
 // TableColumns returns all column names of a single table by its name.
 func (app *BaseApp) TableColumns(tableName string) ([]string, error) {
 	columns := []string{}
+	var err error
 
-	err := app.ConcurrentDB().NewQuery("SELECT name FROM PRAGMA_TABLE_INFO({:tableName})").
-		Bind(dbx.Params{"tableName": tableName}).
-		Column(&columns)
+	if app.DBType() == DatabaseTypePostgreSQL {
+		err = app.ConcurrentDB().NewQuery(`
+			SELECT COALESCE(column_name, '') 
+			FROM information_schema.columns 
+			WHERE table_name = {:tableName} AND table_schema = 'public'
+			ORDER BY ordinal_position, column_name
+		`).Bind(dbx.Params{"tableName": tableName}).
+			Column(&columns)
+	} else {
+		err = app.ConcurrentDB().NewQuery("SELECT name FROM PRAGMA_TABLE_INFO({:tableName})").
+			Bind(dbx.Params{"tableName": tableName}).
+			Column(&columns)
+	}
 
 	return columns, err
 }
@@ -33,10 +44,42 @@ type TableInfoRow struct {
 // TableInfo returns the "table_info" pragma result for the specified table.
 func (app *BaseApp) TableInfo(tableName string) ([]*TableInfoRow, error) {
 	info := []*TableInfoRow{}
+	var err error
 
-	err := app.ConcurrentDB().NewQuery("SELECT * FROM PRAGMA_TABLE_INFO({:tableName})").
-		Bind(dbx.Params{"tableName": tableName}).
-		All(&info)
+	if app.DBType() == DatabaseTypePostgreSQL {
+		// PostgreSQL doesn't have PRAGMA_TABLE_INFO, use information_schema instead
+		// Note: For composite primary keys, each column in the key will have its ordinal position as pk value
+		err = app.ConcurrentDB().NewQuery(`
+			SELECT 
+				c.ordinal_position - 1 as cid,
+				c.column_name as name,
+				UPPER(c.data_type) as type,
+				CASE WHEN c.is_nullable = 'YES' THEN false ELSE true END as notnull,
+				c.column_default as dflt_value,
+				COALESCE(pk_info.pk, 0) as pk
+			FROM information_schema.columns c
+			LEFT JOIN (
+				SELECT 
+					kcu.column_name,
+					kcu.ordinal_position as pk
+				FROM information_schema.table_constraints tc
+				JOIN information_schema.key_column_usage kcu 
+					ON tc.constraint_name = kcu.constraint_name
+					AND tc.table_schema = kcu.table_schema
+					AND tc.table_name = kcu.table_name
+				WHERE tc.constraint_type = 'PRIMARY KEY'
+					AND tc.table_name = {:tableName}
+					AND tc.table_schema = 'public'
+			) as pk_info ON c.column_name = pk_info.column_name
+			WHERE c.table_name = {:tableName} AND c.table_schema = 'public'
+			ORDER BY c.ordinal_position
+		`).Bind(dbx.Params{"tableName": tableName}).
+			All(&info)
+	} else {
+		err = app.ConcurrentDB().NewQuery("SELECT * FROM PRAGMA_TABLE_INFO({:tableName})").
+			Bind(dbx.Params{"tableName": tableName}).
+			All(&info)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -58,15 +101,27 @@ func (app *BaseApp) TableIndexes(tableName string) (map[string]string, error) {
 		Name string
 		Sql  string
 	}{}
+	var err error
 
-	err := app.ConcurrentDB().Select("name", "sql").
-		From("sqlite_master").
-		AndWhere(dbx.NewExp("sql is not null")).
-		AndWhere(dbx.HashExp{
-			"type":     "index",
-			"tbl_name": tableName,
-		}).
-		All(&indexes)
+	if app.DBType() == DatabaseTypePostgreSQL {
+		err = app.ConcurrentDB().NewQuery(`
+			SELECT 
+				indexname as name,
+				indexdef as sql
+			FROM pg_indexes 
+			WHERE schemaname = 'public' AND tablename = {:tableName}
+		`).Bind(dbx.Params{"tableName": tableName}).
+			All(&indexes)
+	} else {
+		err = app.ConcurrentDB().Select("name", "sql").
+			From("sqlite_master").
+			AndWhere(dbx.NewExp("sql is not null")).
+			AndWhere(dbx.HashExp{
+				"type":     "index",
+				"tbl_name": tableName,
+			}).
+			All(&indexes)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -109,13 +164,26 @@ func (app *BaseApp) AuxHasTable(tableName string) bool {
 
 func (app *BaseApp) hasTable(db dbx.Builder, tableName string) bool {
 	var exists int
+	var err error
 
-	err := db.Select("(1)").
-		From("sqlite_schema").
-		AndWhere(dbx.HashExp{"type": []any{"table", "view"}}).
-		AndWhere(dbx.NewExp("LOWER([[name]])=LOWER({:tableName})", dbx.Params{"tableName": tableName})).
-		Limit(1).
-		Row(&exists)
+	if app.DBType() == DatabaseTypePostgreSQL {
+		err = db.NewQuery(`
+			SELECT 1 
+			FROM information_schema.tables 
+			WHERE (table_type = 'BASE TABLE' OR table_type = 'VIEW')
+				AND table_schema = 'public'
+				AND LOWER(table_name) = LOWER({:tableName})
+			LIMIT 1
+		`).Bind(dbx.Params{"tableName": tableName}).
+			Row(&exists)
+	} else {
+		err = db.Select("(1)").
+			From("sqlite_schema").
+			AndWhere(dbx.HashExp{"type": []any{"table", "view"}}).
+			AndWhere(dbx.NewExp("LOWER([[name]])=LOWER({:tableName})", dbx.Params{"tableName": tableName})).
+			Limit(1).
+			Row(&exists)
+	}
 
 	return err == nil && exists > 0
 }

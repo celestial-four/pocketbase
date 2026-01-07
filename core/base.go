@@ -67,7 +67,7 @@ type BaseAppConfig struct {
 	IsDev            bool
 	// DBConfig specifies database configuration (type and connection URL)
 	// If nil, defaults to SQLite with standard file paths
-	DBConfig         *DatabaseConfig
+	DBConfig *DatabaseConfig
 }
 
 // ensures that the BaseApp implements the App interface.
@@ -212,20 +212,32 @@ func NewBaseApp(config BaseAppConfig) *BaseApp {
 		// Use environment variables if no explicit config provided
 		app.config.DBConfig = GetDatabaseConfigFromEnv()
 	}
-	
+
 	// Validate database configuration
 	if err := app.config.DBConfig.Validate(); err != nil {
 		// Log warning but don't fail - fall back to SQLite
 		slog.Warn("Invalid database configuration, falling back to SQLite", "error", err)
 		app.config.DBConfig = &DatabaseConfig{Type: DatabaseTypeSQLite}
 	}
-	
+
 	// Set appropriate DBConnect function based on database type
-	// Currently only SQLite is supported
 	if app.config.DBConnect == nil {
-		app.config.DBConnect = DefaultDBConnect
+		if app.config.DBConfig.IsPostgreSQL() {
+			// For PostgreSQL, create a wrapper that uses the configured URL
+			// Note: The dbPath parameter is specific to SQLite (file-based storage)
+			// and is ignored for PostgreSQL which uses the URL-based connection string
+			pgURL := app.config.DBConfig.URL
+			app.config.DBConnect = func(dbPath string) (*dbx.DB, error) {
+				// Note: For PostgreSQL, dbPath is ignored - connection uses the configured URL instead
+				// SQLite: uses dbPath to locate the .db file
+				// PostgreSQL: uses DBConfig.URL for the connection string
+				return PostgreSQLDBConnect(pgURL)
+			}
+		} else {
+			app.config.DBConnect = DefaultDBConnect
+		}
 	}
-	
+
 	if app.config.DataMaxOpenConns <= 0 {
 		app.config.DataMaxOpenConns = DefaultDataMaxOpenConns
 	}
@@ -610,6 +622,14 @@ func (app *BaseApp) EncryptionEnv() string {
 // When enabled logs, executed sql statements, etc. are printed to the stderr.
 func (app *BaseApp) IsDev() bool {
 	return app.config.IsDev
+}
+
+// DBType returns the configured database type (sqlite or postgres).
+func (app *BaseApp) DBType() DatabaseType {
+	if app.config.DBConfig != nil {
+		return app.config.DBConfig.Type
+	}
+	return DatabaseTypeSQLite
 }
 
 // Settings returns the loaded app settings.
@@ -1374,21 +1394,27 @@ func (app *BaseApp) registerBaseHooks() {
 		Priority: 999,
 	})
 
+	// Add database-specific optimization tasks
 	app.Cron().Add("__pbDBOptimize__", "0 0 * * *", func() {
-		_, execErr := app.NonconcurrentDB().NewQuery("PRAGMA wal_checkpoint(TRUNCATE)").Execute()
-		if execErr != nil {
-			app.Logger().Warn("Failed to run periodic PRAGMA wal_checkpoint for the main DB", slog.String("error", execErr.Error()))
-		}
+		// SQLite-specific optimizations (PRAGMAs)
+		if app.DBType() == DatabaseTypeSQLite {
+			_, execErr := app.NonconcurrentDB().NewQuery("PRAGMA wal_checkpoint(TRUNCATE)").Execute()
+			if execErr != nil {
+				app.Logger().Warn("Failed to run periodic PRAGMA wal_checkpoint for the main DB", slog.String("error", execErr.Error()))
+			}
 
-		_, execErr = app.AuxNonconcurrentDB().NewQuery("PRAGMA wal_checkpoint(TRUNCATE)").Execute()
-		if execErr != nil {
-			app.Logger().Warn("Failed to run periodic PRAGMA wal_checkpoint for the auxiliary DB", slog.String("error", execErr.Error()))
-		}
+			_, execErr = app.AuxNonconcurrentDB().NewQuery("PRAGMA wal_checkpoint(TRUNCATE)").Execute()
+			if execErr != nil {
+				app.Logger().Warn("Failed to run periodic PRAGMA wal_checkpoint for the auxiliary DB", slog.String("error", execErr.Error()))
+			}
 
-		_, execErr = app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
-		if execErr != nil {
-			app.Logger().Warn("Failed to run periodic PRAGMA optimize", slog.String("error", execErr.Error()))
+			_, execErr = app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
+			if execErr != nil {
+				app.Logger().Warn("Failed to run periodic PRAGMA optimize", slog.String("error", execErr.Error()))
+			}
 		}
+		// PostgreSQL optimization tasks could be added here in the future
+		// (e.g., VACUUM ANALYZE for maintaining statistics)
 	})
 
 	app.registerSettingsHooks()

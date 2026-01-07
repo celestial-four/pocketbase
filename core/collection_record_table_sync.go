@@ -144,9 +144,11 @@ func (app *BaseApp) SyncRecordTableSchema(newCollection *Collection, oldCollecti
 
 	// run optimize per the SQLite recommendations
 	// (https://www.sqlite.org/pragma.html#pragma_optimize)
-	_, optimizeErr := app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
-	if optimizeErr != nil {
-		app.Logger().Warn("Failed to run PRAGMA optimize after record table sync", slog.String("error", optimizeErr.Error()))
+	if app.DBType() == DatabaseTypeSQLite {
+		_, optimizeErr := app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
+		if optimizeErr != nil {
+			app.Logger().Warn("Failed to run PRAGMA optimize after record table sync", slog.String("error", optimizeErr.Error()))
+		}
 	}
 
 	return nil
@@ -187,11 +189,24 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 				Name string `db:"name"`
 				SQL  string `db:"sql"`
 			}{}
-			err := txApp.DB().Select("name", "sql").
-				From("sqlite_master").
-				AndWhere(dbx.NewExp("sql is not null")).
-				AndWhere(dbx.HashExp{"type": "view"}).
-				All(&views)
+
+			// Use database-specific view query
+			var viewQuery *dbx.SelectQuery
+			if txApp.DBType() == DatabaseTypePostgreSQL {
+				// Reconstruct full CREATE VIEW statement to match SQLite's sqlite_master.sql format
+				viewQuery = txApp.DB().Select(
+					"viewname as name",
+					"('CREATE VIEW ' || quote_ident(schemaname) || '.' || quote_ident(viewname) || ' AS ' || definition) as sql",
+				).
+					From("pg_views").
+					AndWhere(dbx.NewExp("schemaname = 'public'"))
+			} else {
+				viewQuery = txApp.DB().Select("name", "sql").
+					From("sqlite_master").
+					AndWhere(dbx.NewExp("sql is not null")).
+					AndWhere(dbx.HashExp{"type": "view"})
+			}
+			err := viewQuery.All(&views)
 			if err != nil {
 				return err
 			}
@@ -221,8 +236,32 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 
 			if !isOldMultiple && isNewMultiple {
 				// single -> multiple (convert to array)
-				copyQuery = txApp.DB().NewQuery(fmt.Sprintf(
-					`UPDATE {{%s}} set [[%s]] = (
+				var sql string
+				if txApp.DBType() == DatabaseTypePostgreSQL {
+					sql = fmt.Sprintf(
+						`UPDATE {{%s}} set [[%s]] = (
+							CASE
+								WHEN COALESCE([[%s]]::text, '') = ''
+								THEN '[]'::jsonb
+								ELSE (
+									CASE
+										WHEN jsonb_typeof([[%s]]::jsonb) = 'array'
+										THEN [[%s]]::jsonb
+										ELSE jsonb_build_array([[%s]])
+									END
+								)
+							END
+						)`,
+						newCollection.Name,
+						originalName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+					)
+				} else {
+					sql = fmt.Sprintf(
+						`UPDATE {{%s}} set [[%s]] = (
 							CASE
 								WHEN COALESCE([[%s]], '') = ''
 								THEN '[]'
@@ -235,41 +274,77 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 								)
 							END
 						)`,
-					newCollection.Name,
-					originalName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-				))
+						newCollection.Name,
+						originalName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+					)
+				}
+				copyQuery = txApp.DB().NewQuery(sql)
 			} else {
 				// multiple -> single (keep only the last element)
 				//
 				// note: for file fields the actual file objects are not
 				// deleted allowing additional custom handling via migration
-				copyQuery = txApp.DB().NewQuery(fmt.Sprintf(
-					`UPDATE {{%s}} set [[%s]] = (
-						CASE
-							WHEN COALESCE([[%s]], '[]') = '[]'
-							THEN ''
-							ELSE (
-								CASE
-									WHEN json_valid([[%s]]) AND json_type([[%s]]) == 'array'
-									THEN COALESCE(json_extract([[%s]], '$[#-1]'), '')
-									ELSE [[%s]]
-								END
-							)
-						END
-					)`,
-					newCollection.Name,
-					originalName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-					oldTempName,
-				))
+				var sql string
+				if txApp.DBType() == DatabaseTypePostgreSQL {
+					// For PostgreSQL, use ->> to extract text value directly
+					// jsonb_array_length - 1 gives the index of the last element
+					// Added explicit check for array length > 0 to handle empty arrays
+					sql = fmt.Sprintf(
+						`UPDATE {{%s}} set [[%s]] = (
+							CASE
+								WHEN COALESCE([[%s]]::text, '[]') = '[]'
+								THEN ''
+								ELSE (
+									CASE
+										WHEN jsonb_typeof([[%s]]::jsonb) = 'array' AND jsonb_array_length([[%s]]::jsonb) > 0
+										THEN COALESCE([[%s]]::jsonb ->> (jsonb_array_length([[%s]]::jsonb) - 1), '')
+										WHEN jsonb_typeof([[%s]]::jsonb) = 'array'
+										THEN ''
+										ELSE [[%s]]::text
+									END
+								)
+							END
+						)`,
+						newCollection.Name,
+						originalName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+					)
+				} else {
+					sql = fmt.Sprintf(
+						`UPDATE {{%s}} set [[%s]] = (
+							CASE
+								WHEN COALESCE([[%s]], '[]') = '[]'
+								THEN ''
+								ELSE (
+									CASE
+										WHEN json_valid([[%s]]) AND json_type([[%s]]) == 'array'
+										THEN COALESCE(json_extract([[%s]], '$[#-1]'), '')
+										ELSE [[%s]]
+									END
+								)
+							END
+						)`,
+						newCollection.Name,
+						originalName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+						oldTempName,
+					)
+				}
+				copyQuery = txApp.DB().NewQuery(sql)
 			}
 
 			// copy the normalized values
