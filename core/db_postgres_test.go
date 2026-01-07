@@ -10,12 +10,21 @@ func TestPostgreSQLDBConnect(t *testing.T) {
 	// Note: These tests verify the PostgreSQL connection function signatures
 	// and basic behavior. They don't require a running PostgreSQL instance.
 
-	t.Run("returns nil with invalid connection URL", func(t *testing.T) {
-		// PostgreSQLDBConnect should attempt to open a connection
-		// and fail with an invalid URL, but not panic
-		_, err := core.PostgreSQLDBConnect("")
-		if err == nil {
-			t.Log("Empty URL opened successfully (driver accepted it)")
+	t.Run("handles empty connection URL", func(t *testing.T) {
+		// PostgreSQLDBConnect with empty URL - the pgx driver may accept it
+		// (lazy connection) but subsequent operations would fail.
+		// This test verifies the function doesn't panic with empty input.
+		db, err := core.PostgreSQLDBConnect("")
+		if err != nil {
+			// Expected behavior: driver rejects empty URL
+			t.Logf("Empty URL rejected as expected: %v", err)
+		} else if db != nil {
+			// Driver accepted empty URL (lazy connection) - verify by pinging
+			if pingErr := db.DB().Ping(); pingErr != nil {
+				t.Logf("Empty URL accepted but ping failed as expected: %v", pingErr)
+			} else {
+				t.Log("Empty URL opened successfully (unexpected - may have local postgres)")
+			}
 		}
 	})
 

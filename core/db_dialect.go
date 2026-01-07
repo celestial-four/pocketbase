@@ -388,6 +388,14 @@ func TranslateCreateTable(sql string, toDialect Dialect) string {
 // TranslateSQLForDB translates SQL from SQLite-syntax to the appropriate dialect
 // based on the provided database type.
 // This is a convenience function for use in migrations and raw SQL queries.
+//
+// Note: This function uses simple string replacement for SQL translation.
+// Limitations include:
+//   - Pattern matching requires exact spacing/formatting (e.g., DEFAULT ('r'||lower(hex(randomblob(7)))))
+//   - Replacements may incorrectly match patterns inside string literals or comments
+//   - Custom-formatted migration SQL might not translate correctly
+//
+// For complex migrations, consider using database-specific SQL files.
 func TranslateSQLForDB(sql string, dbType DatabaseType) string {
 	if dbType == DatabaseTypePostgreSQL {
 		return TranslateCreateTable(sql, NewPostgreSQLDialect())

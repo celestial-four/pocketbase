@@ -19,6 +19,10 @@ import (
 // as expected. Thoroughly test in a non-production environment first.
 //
 // For production use with simpler deployments, SQLite is still recommended.
+//
+// Note: Connection pool settings (MaxOpenConns, MaxIdleConns, ConnMaxLifetime)
+// are configured via BaseAppConfig and applied after connection is established.
+// The dbURL may contain credentials - ensure proper handling when logging errors.
 func PostgreSQLDBConnect(dbURL string) (*dbx.DB, error) {
 	db, err := dbx.Open("pgx", dbURL)
 	if err != nil {

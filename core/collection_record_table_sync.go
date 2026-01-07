@@ -193,7 +193,11 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 			// Use database-specific view query
 			var viewQuery *dbx.SelectQuery
 			if txApp.DBType() == DatabaseTypePostgreSQL {
-				viewQuery = txApp.DB().Select("viewname as name", "definition as sql").
+				// Reconstruct full CREATE VIEW statement to match SQLite's sqlite_master.sql format
+				viewQuery = txApp.DB().Select(
+					"viewname as name",
+					"('CREATE VIEW ' || quote_ident(schemaname) || '.' || quote_ident(viewname) || ' AS ' || definition) as sql",
+				).
 					From("pg_views").
 					AndWhere(dbx.NewExp("schemaname = 'public'"))
 			} else {
@@ -289,6 +293,7 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 				if txApp.DBType() == DatabaseTypePostgreSQL {
 					// For PostgreSQL, use ->> to extract text value directly
 					// jsonb_array_length - 1 gives the index of the last element
+					// Added explicit check for array length > 0 to handle empty arrays
 					sql = fmt.Sprintf(
 						`UPDATE {{%s}} set [[%s]] = (
 							CASE
@@ -296,8 +301,10 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 								THEN ''
 								ELSE (
 									CASE
-										WHEN jsonb_typeof([[%s]]::jsonb) = 'array'
+										WHEN jsonb_typeof([[%s]]::jsonb) = 'array' AND jsonb_array_length([[%s]]::jsonb) > 0
 										THEN COALESCE([[%s]]::jsonb ->> (jsonb_array_length([[%s]]::jsonb) - 1), '')
+										WHEN jsonb_typeof([[%s]]::jsonb) = 'array'
+										THEN ''
 										ELSE [[%s]]::text
 									END
 								)
@@ -305,6 +312,8 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 						)`,
 						newCollection.Name,
 						originalName,
+						oldTempName,
+						oldTempName,
 						oldTempName,
 						oldTempName,
 						oldTempName,

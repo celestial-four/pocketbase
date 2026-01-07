@@ -14,10 +14,10 @@ func (app *BaseApp) TableColumns(tableName string) ([]string, error) {
 
 	if app.DBType() == DatabaseTypePostgreSQL {
 		err = app.ConcurrentDB().NewQuery(`
-			SELECT column_name 
+			SELECT COALESCE(column_name, '') 
 			FROM information_schema.columns 
 			WHERE table_name = {:tableName} AND table_schema = 'public'
-			ORDER BY ordinal_position
+			ORDER BY ordinal_position, column_name
 		`).Bind(dbx.Params{"tableName": tableName}).
 			Column(&columns)
 	} else {
@@ -48,24 +48,31 @@ func (app *BaseApp) TableInfo(tableName string) ([]*TableInfoRow, error) {
 
 	if app.DBType() == DatabaseTypePostgreSQL {
 		// PostgreSQL doesn't have PRAGMA_TABLE_INFO, use information_schema instead
+		// Note: For composite primary keys, each column in the key will have its ordinal position as pk value
 		err = app.ConcurrentDB().NewQuery(`
 			SELECT 
-				ordinal_position - 1 as cid,
-				column_name as name,
-				UPPER(data_type) as type,
-				CASE WHEN is_nullable = 'NO' THEN true ELSE false END as notnull,
-				column_default as dflt_value,
-				CASE WHEN column_name IN (
-					SELECT kcu.column_name 
-					FROM information_schema.table_constraints tc
-					JOIN information_schema.key_column_usage kcu 
-						ON tc.constraint_name = kcu.constraint_name
-					WHERE tc.constraint_type = 'PRIMARY KEY' 
-						AND tc.table_name = {:tableName}
-				) THEN 1 ELSE 0 END as pk
-			FROM information_schema.columns 
-			WHERE table_name = {:tableName} AND table_schema = 'public'
-			ORDER BY ordinal_position
+				c.ordinal_position - 1 as cid,
+				c.column_name as name,
+				UPPER(c.data_type) as type,
+				CASE WHEN c.is_nullable = 'YES' THEN false ELSE true END as notnull,
+				c.column_default as dflt_value,
+				COALESCE(pk_info.pk, 0) as pk
+			FROM information_schema.columns c
+			LEFT JOIN (
+				SELECT 
+					kcu.column_name,
+					kcu.ordinal_position as pk
+				FROM information_schema.table_constraints tc
+				JOIN information_schema.key_column_usage kcu 
+					ON tc.constraint_name = kcu.constraint_name
+					AND tc.table_schema = kcu.table_schema
+					AND tc.table_name = kcu.table_name
+				WHERE tc.constraint_type = 'PRIMARY KEY'
+					AND tc.table_name = {:tableName}
+					AND tc.table_schema = 'public'
+			) as pk_info ON c.column_name = pk_info.column_name
+			WHERE c.table_name = {:tableName} AND c.table_schema = 'public'
+			ORDER BY c.ordinal_position
 		`).Bind(dbx.Params{"tableName": tableName}).
 			All(&info)
 	} else {

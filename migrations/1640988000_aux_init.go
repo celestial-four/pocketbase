@@ -30,8 +30,8 @@ func init() {
 			// Create the hour index separately since it needs special handling for PostgreSQL
 			var indexSQL string
 			if txApp.DBType() == core.DatabaseTypePostgreSQL {
-				// For PostgreSQL, use date_trunc with proper column reference
-				indexSQL = `CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (date_trunc('hour', "created"::timestamp))`
+				// For PostgreSQL, use date_trunc with [[]] template marker for proper escaping
+				indexSQL = `CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (date_trunc('hour', [[created]]::timestamp))`
 			} else {
 				indexSQL = `CREATE INDEX IF NOT EXISTS idx_logs_created_hour on {{_logs}} (strftime('%Y-%m-%d %H:00:00', [[created]]))`
 			}

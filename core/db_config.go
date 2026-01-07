@@ -66,7 +66,7 @@ func (dc *DatabaseConfig) Validate() error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported database type: %s (supported: sqlite, postgres)", dc.Type)
+		return fmt.Errorf("unsupported database type: %s (supported: sqlite; experimental: postgres)", dc.Type)
 	}
 }
 

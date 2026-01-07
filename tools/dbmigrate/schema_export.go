@@ -283,7 +283,7 @@ func (e *SchemaExporter) exportCollectionData(collection *core.Collection) (stri
 
 // generateInsertSQL generates an INSERT statement for a record
 func (e *SchemaExporter) generateInsertSQL(collection *core.Collection, record *core.Record) string {
-	// Pre-allocate with 1 extra for the id field
+	// Pre-allocate with capacity for id field and all collection fields
 	columns := make([]string, 0, len(collection.Fields)+1)
 	values := make([]string, 0, len(collection.Fields)+1)
 
