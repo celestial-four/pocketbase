@@ -56,7 +56,7 @@ func init() {
 		`
 		// Translate SQL for the current database type
 		collectionsSQL = core.TranslateSQLForDB(collectionsSQL, txApp.DBType())
-		
+
 		_, execerr := txApp.DB().NewQuery(collectionsSQL).Execute()
 		if execerr != nil {
 			return fmt.Errorf("_collections exec error: %w", execerr)
@@ -119,7 +119,7 @@ func createParamsTable(txApp core.App) error {
 	`
 	// Translate SQL for the current database type
 	paramsSQL = core.TranslateSQLForDB(paramsSQL, txApp.DBType())
-	
+
 	_, execErr := txApp.DB().NewQuery(paramsSQL).Execute()
 
 	return execErr

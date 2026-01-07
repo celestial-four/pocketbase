@@ -131,7 +131,7 @@ func NewWithConfig(config Config) *PocketBase {
 	// Build database config from flags or environment variables
 	// Priority: CLI flags > Environment variables > defaults
 	dbConfig := &core.DatabaseConfig{}
-	
+
 	// First check CLI flags
 	if pb.dbTypeFlag != "" {
 		dbConfig.Type = core.DatabaseType(strings.ToLower(pb.dbTypeFlag))
@@ -142,7 +142,7 @@ func NewWithConfig(config Config) *PocketBase {
 		dbConfig.Type = envConfig.Type
 		dbConfig.URL = envConfig.URL
 	}
-	
+
 	// Ensure we have a valid type (default to SQLite)
 	if dbConfig.Type == "" {
 		dbConfig.Type = core.DatabaseTypeSQLite

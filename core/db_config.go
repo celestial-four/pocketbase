@@ -23,7 +23,7 @@ const (
 type DatabaseConfig struct {
 	// Type is the database type (sqlite or postgres).
 	Type DatabaseType
-	
+
 	// URL is the database connection URL.
 	// For PostgreSQL: connection string (e.g., "postgres://user:pass@host:5432/dbname")
 	// For SQLite: this field is ignored (uses DataDir-based paths)
@@ -31,7 +31,7 @@ type DatabaseConfig struct {
 }
 
 // GetDatabaseConfigFromEnv reads database configuration from environment variables.
-// 
+//
 // Environment variables:
 //   - PB_DB_TYPE: database type ("sqlite" or "postgres"). Defaults to "sqlite".
 //   - PB_DB_URL: database connection URL (required for postgres, ignored for sqlite).

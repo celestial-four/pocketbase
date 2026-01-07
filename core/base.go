@@ -67,7 +67,7 @@ type BaseAppConfig struct {
 	IsDev            bool
 	// DBConfig specifies database configuration (type and connection URL)
 	// If nil, defaults to SQLite with standard file paths
-	DBConfig         *DatabaseConfig
+	DBConfig *DatabaseConfig
 }
 
 // ensures that the BaseApp implements the App interface.
@@ -212,14 +212,14 @@ func NewBaseApp(config BaseAppConfig) *BaseApp {
 		// Use environment variables if no explicit config provided
 		app.config.DBConfig = GetDatabaseConfigFromEnv()
 	}
-	
+
 	// Validate database configuration
 	if err := app.config.DBConfig.Validate(); err != nil {
 		// Log warning but don't fail - fall back to SQLite
 		slog.Warn("Invalid database configuration, falling back to SQLite", "error", err)
 		app.config.DBConfig = &DatabaseConfig{Type: DatabaseTypeSQLite}
 	}
-	
+
 	// Set appropriate DBConnect function based on database type
 	if app.config.DBConnect == nil {
 		if app.config.DBConfig.IsPostgreSQL() {
@@ -237,7 +237,7 @@ func NewBaseApp(config BaseAppConfig) *BaseApp {
 			app.config.DBConnect = DefaultDBConnect
 		}
 	}
-	
+
 	if app.config.DataMaxOpenConns <= 0 {
 		app.config.DataMaxOpenConns = DefaultDataMaxOpenConns
 	}

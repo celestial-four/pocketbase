@@ -183,9 +183,6 @@ var (
 	// Matches SQLite strftime pattern
 	strftimePattern = regexp.MustCompile(`(?i)strftime\s*\(\s*'([^']+)'\s*(?:,\s*([^)]+))?\s*\)`)
 
-	// Matches SQLite BOOLEAN in column definitions (0/1)
-	booleanLiteralPattern = regexp.MustCompile(`(?i)\bBOOLEAN\s+DEFAULT\s+(0|1|TRUE|FALSE)\b`)
-
 	// Matches SQLite iif function
 	iifPattern = regexp.MustCompile(`(?i)\biif\s*\(`)
 

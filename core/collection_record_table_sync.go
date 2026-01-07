@@ -189,7 +189,7 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 				Name string `db:"name"`
 				SQL  string `db:"sql"`
 			}{}
-			
+
 			// Use database-specific view query
 			var viewQuery *dbx.SelectQuery
 			if txApp.DBType() == DatabaseTypePostgreSQL {

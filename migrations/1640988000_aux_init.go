@@ -21,12 +21,12 @@ func init() {
 			`
 			// Translate SQL for the current database type
 			logsSQL = core.TranslateSQLForDB(logsSQL, txApp.DBType())
-			
+
 			_, execErr := txApp.AuxDB().NewQuery(logsSQL).Execute()
 			if execErr != nil {
 				return execErr
 			}
-			
+
 			// Create the hour index separately since it needs special handling for PostgreSQL
 			var indexSQL string
 			if txApp.DBType() == core.DatabaseTypePostgreSQL {

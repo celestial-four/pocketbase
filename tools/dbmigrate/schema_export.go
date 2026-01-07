@@ -283,8 +283,9 @@ func (e *SchemaExporter) exportCollectionData(collection *core.Collection) (stri
 
 // generateInsertSQL generates an INSERT statement for a record
 func (e *SchemaExporter) generateInsertSQL(collection *core.Collection, record *core.Record) string {
-	var columns []string
-	var values []string
+	// Pre-allocate with 1 extra for the id field
+	columns := make([]string, 0, len(collection.Fields)+1)
+	values := make([]string, 0, len(collection.Fields)+1)
 
 	// Always include id
 	columns = append(columns, e.dialect.QuoteIdentifier("id"))

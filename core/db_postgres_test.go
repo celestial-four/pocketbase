@@ -101,7 +101,7 @@ func TestTranslateSQLForDB(t *testing.T) {
 	t.Run("translates ID generation for PostgreSQL", func(t *testing.T) {
 		sql := "CREATE TABLE test (id TEXT PRIMARY KEY DEFAULT ('r'||lower(hex(randomblob(7)))) NOT NULL)"
 		result := core.TranslateSQLForDB(sql, core.DatabaseTypePostgreSQL)
-		
+
 		// Should contain PostgreSQL random ID generation (gen_random_uuid or similar)
 		if result == sql {
 			t.Error("expected SQL to be translated for PostgreSQL")
@@ -111,7 +111,7 @@ func TestTranslateSQLForDB(t *testing.T) {
 	t.Run("translates timestamp for PostgreSQL", func(t *testing.T) {
 		sql := "CREATE TABLE test (created TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%fZ')) NOT NULL)"
 		result := core.TranslateSQLForDB(sql, core.DatabaseTypePostgreSQL)
-		
+
 		// Should be translated
 		if result == sql {
 			t.Error("expected timestamp SQL to be translated for PostgreSQL")
@@ -122,33 +122,33 @@ func TestTranslateSQLForDB(t *testing.T) {
 func TestDialectMethods(t *testing.T) {
 	t.Run("PostgreSQL dialect returns correct values", func(t *testing.T) {
 		dialect := core.NewPostgreSQLDialect()
-		
+
 		if dialect.Name() != "postgres" {
 			t.Errorf("expected name 'postgres', got %s", dialect.Name())
 		}
-		
+
 		if dialect.JSONType() != "JSONB" {
 			t.Errorf("expected JSON type 'JSONB', got %s", dialect.JSONType())
 		}
-		
+
 		if dialect.BooleanType() != "BOOLEAN" {
 			t.Errorf("expected boolean type 'BOOLEAN', got %s", dialect.BooleanType())
 		}
-		
+
 		if dialect.BooleanTrue() != "TRUE" {
 			t.Errorf("expected boolean true 'TRUE', got %s", dialect.BooleanTrue())
 		}
-		
+
 		if dialect.BooleanFalse() != "FALSE" {
 			t.Errorf("expected boolean false 'FALSE', got %s", dialect.BooleanFalse())
 		}
-		
+
 		// RandomID should use PostgreSQL's random generation
 		randomID := dialect.RandomID()
 		if randomID == "" {
 			t.Error("expected non-empty random ID generation expression")
 		}
-		
+
 		// CurrentTimestamp should use PostgreSQL's NOW()
 		ts := dialect.CurrentTimestamp()
 		if ts == "" {
@@ -158,15 +158,15 @@ func TestDialectMethods(t *testing.T) {
 
 	t.Run("SQLite dialect returns correct values", func(t *testing.T) {
 		dialect := core.NewSQLiteDialect()
-		
+
 		if dialect.Name() != "sqlite" {
 			t.Errorf("expected name 'sqlite', got %s", dialect.Name())
 		}
-		
+
 		if dialect.JSONType() != "JSON" {
 			t.Errorf("expected JSON type 'JSON', got %s", dialect.JSONType())
 		}
-		
+
 		if dialect.BooleanType() != "BOOLEAN" {
 			t.Errorf("expected boolean type 'BOOLEAN', got %s", dialect.BooleanType())
 		}
