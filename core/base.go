@@ -224,9 +224,13 @@ func NewBaseApp(config BaseAppConfig) *BaseApp {
 	if app.config.DBConnect == nil {
 		if app.config.DBConfig.IsPostgreSQL() {
 			// For PostgreSQL, create a wrapper that uses the configured URL
+			// Note: The dbPath parameter is specific to SQLite (file-based storage)
+			// and is ignored for PostgreSQL which uses the URL-based connection string
 			pgURL := app.config.DBConfig.URL
 			app.config.DBConnect = func(dbPath string) (*dbx.DB, error) {
-				// Note: For PostgreSQL, we ignore dbPath and use the configured URL
+				// Note: For PostgreSQL, dbPath is ignored - connection uses the configured URL instead
+				// SQLite: uses dbPath to locate the .db file
+				// PostgreSQL: uses DBConfig.URL for the connection string
 				return PostgreSQLDBConnect(pgURL)
 			}
 		} else {

@@ -287,6 +287,8 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 				// deleted allowing additional custom handling via migration
 				var sql string
 				if txApp.DBType() == DatabaseTypePostgreSQL {
+					// For PostgreSQL, use ->> to extract text value directly
+					// jsonb_array_length - 1 gives the index of the last element
 					sql = fmt.Sprintf(
 						`UPDATE {{%s}} set [[%s]] = (
 							CASE
@@ -295,7 +297,7 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 								ELSE (
 									CASE
 										WHEN jsonb_typeof([[%s]]::jsonb) = 'array'
-										THEN COALESCE(([[%s]]::jsonb -> -1)::text, '')
+										THEN COALESCE([[%s]]::jsonb ->> (jsonb_array_length([[%s]]::jsonb) - 1), '')
 										ELSE [[%s]]::text
 									END
 								)
@@ -303,6 +305,7 @@ func normalizeSingleVsMultipleFieldChanges(app App, newCollection *Collection, o
 						)`,
 						newCollection.Name,
 						originalName,
+						oldTempName,
 						oldTempName,
 						oldTempName,
 						oldTempName,
