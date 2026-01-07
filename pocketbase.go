@@ -38,6 +38,8 @@ type PocketBase struct {
 	encryptionEnvFlag string
 	queryTimeout      int
 	hideStartBanner   bool
+	dbTypeFlag        string
+	dbURLFlag         string
 
 	// RootCmd is the main console command
 	RootCmd *cobra.Command
@@ -53,6 +55,8 @@ type Config struct {
 	DefaultDataDir       string // if not set, it will fallback to "./pb_data"
 	DefaultEncryptionEnv string
 	DefaultQueryTimeout  time.Duration // default to core.DefaultQueryTimeout (in seconds)
+	DefaultDBType        string        // default database type ("sqlite" or "postgres"), defaults to "sqlite"
+	DefaultDBURL         string        // default database connection URL (for postgres)
 
 	// optional DB configurations
 	DataMaxOpenConns int                // default to core.DefaultDataMaxOpenConns
@@ -124,6 +128,26 @@ func NewWithConfig(config Config) *PocketBase {
 	// (errors are ignored, since the full flags parsing happens on Execute())
 	pb.eagerParseFlags(&config)
 
+	// Build database config from flags or environment variables
+	// Priority: CLI flags > Environment variables > defaults
+	dbConfig := &core.DatabaseConfig{}
+	
+	// First check CLI flags
+	if pb.dbTypeFlag != "" {
+		dbConfig.Type = core.DatabaseType(strings.ToLower(pb.dbTypeFlag))
+		dbConfig.URL = pb.dbURLFlag
+	} else {
+		// Fall back to environment variables
+		envConfig := core.GetDatabaseConfigFromEnv()
+		dbConfig.Type = envConfig.Type
+		dbConfig.URL = envConfig.URL
+	}
+	
+	// Ensure we have a valid type (default to SQLite)
+	if dbConfig.Type == "" {
+		dbConfig.Type = core.DatabaseTypeSQLite
+	}
+
 	// initialize the app instance
 	pb.App = core.NewBaseApp(core.BaseAppConfig{
 		IsDev:            pb.devFlag,
@@ -135,6 +159,7 @@ func NewWithConfig(config Config) *PocketBase {
 		AuxMaxOpenConns:  config.AuxMaxOpenConns,
 		AuxMaxIdleConns:  config.AuxMaxIdleConns,
 		DBConnect:        config.DBConnect,
+		DBConfig:         dbConfig,
 	})
 
 	// hide the default help command (allow only `--help` flag)
@@ -243,6 +268,20 @@ func (pb *PocketBase) eagerParseFlags(config *Config) error {
 		"queryTimeout",
 		int(config.DefaultQueryTimeout.Seconds()),
 		"the default SELECT queries timeout in seconds",
+	)
+
+	pb.RootCmd.PersistentFlags().StringVar(
+		&pb.dbTypeFlag,
+		"dbType",
+		config.DefaultDBType,
+		"the database type to use (sqlite or postgres); only sqlite is currently supported",
+	)
+
+	pb.RootCmd.PersistentFlags().StringVar(
+		&pb.dbURLFlag,
+		"dbURL",
+		config.DefaultDBURL,
+		"the database connection URL (for postgres); ignored for sqlite",
 	)
 
 	return pb.RootCmd.ParseFlags(os.Args[1:])
