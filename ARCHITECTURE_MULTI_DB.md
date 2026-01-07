@@ -111,10 +111,78 @@ if err := dbConfig.Validate(); err != nil {
 ✅ Application starts correctly
 ```
 
-## PostgreSQL Support - Future Work
+## PostgreSQL Support - Implementation Progress
 
 ### Current Status
-PostgreSQL support is **not implemented**. The `PostgreSQLDBConnect` function returns an error:
+PostgreSQL support is **in development**. The following components have been implemented:
+
+✅ **Phase 1 Complete**: SQL Dialect Translation Layer
+✅ **Phase 2 Complete**: Schema Export Tools
+✅ **Phase 3 Complete**: Migration Planning Utilities
+
+### What's Implemented
+
+#### 1. SQL Dialect Translation Layer (`core/db_dialect.go`)
+A comprehensive dialect abstraction that translates SQLite-specific SQL to PostgreSQL:
+
+```go
+// Dialect interface for database-specific SQL operations
+type Dialect interface {
+    Name() string
+    QuoteIdentifier(identifier string) string
+    RandomID() string
+    CurrentTimestamp() string
+    BooleanType() string
+    JSONType() string
+    AutoIncrementPK(big bool) string
+    Placeholder(index int) string
+    StrftimeHour(column string) string
+    TranslateSQL(sql string) string
+}
+```
+
+**Implemented translations:**
+- `hex(randomblob(n))` → `encode(gen_random_bytes(n), 'hex')`
+- `strftime()` → `to_char()` with format conversion
+- `JSON` → `JSONB`
+- `json_array()` → `jsonb_build_array()`
+- `json_object()` → `jsonb_build_object()`
+- `json_each()` → `jsonb_array_elements()`
+- `json_array_length()` → `jsonb_array_length()`
+- `JSON_EXTRACT()` → `jsonb_extract_path_text()`
+
+#### 2. Schema Export Tools (`tools/dbmigrate/`)
+Schema export utilities that generate database-specific SQL:
+
+```go
+// Export schema for PostgreSQL
+schema, err := dbmigrate.ExportSchemaForDialect(app, core.DatabaseTypePostgreSQL)
+```
+
+Features:
+- Export all collection schemas
+- Export system tables (_params, _collections, _logs)
+- Generate PostgreSQL-compatible indexes
+- Export data as INSERT statements
+
+#### 3. CLI Commands
+New commands for schema export and migration planning:
+
+```bash
+# Export schema to PostgreSQL format
+pocketbase export-schema --format postgres -o schema.sql
+
+# Include data in export
+pocketbase export-schema --format postgres --data -o full_export.sql
+
+# Generate a complete migration plan
+pocketbase migration-plan --target postgres -o migration/
+```
+
+### What's Needed (Remaining Work)
+
+#### 1. PostgreSQL Connection Implementation
+The `PostgreSQLDBConnect` function currently returns an error:
 
 ```go
 func PostgreSQLDBConnect(dbURL string) (*dbx.DB, error) {
@@ -122,39 +190,7 @@ func PostgreSQLDBConnect(dbURL string) (*dbx.DB, error) {
 }
 ```
 
-### What's Needed
-
-#### 1. SQL Dialect Translation
-PocketBase uses many SQLite-specific features that need translation:
-
-**Examples:**
-```sql
--- SQLite
-CREATE TABLE users (
-    id TEXT PRIMARY KEY DEFAULT ('r'||lower(hex(randomblob(7)))) NOT NULL
-);
-
--- PostgreSQL equivalent needed
-CREATE TABLE users (
-    id TEXT PRIMARY KEY DEFAULT ('r' || encode(gen_random_bytes(7), 'hex')) NOT NULL
-);
-```
-
-**Other SQLite-specific features:**
-- `strftime()` → PostgreSQL date functions
-- `AUTOINCREMENT` → `SERIAL` or `BIGSERIAL`
-- `JSON` functions differ significantly
-- `PRAGMA` statements need alternatives
-- Index syntax differences
-
-#### 2. Schema Migrations
-Create PostgreSQL-compatible versions of all migrations in `/migrations`:
-- Data type conversions
-- Constraint translations
-- Index definitions
-- Trigger replacements (if any)
-
-#### 3. Query Builder Adaptation
+#### 2. Query Builder Adaptation
 The `github.com/pocketbase/dbx` package needs to handle:
 - Parameter placeholders (`?` vs `$1, $2, ...`)
 - Quote identifiers differently
@@ -189,22 +225,40 @@ The `github.com/pocketbase/dbx` package needs to handle:
 - Multi-node testing for PostgreSQL
 - Failure scenario testing
 
-### Migration Path (Planned)
+### Migration Path
 
-1. **Phase 1**: Schema export tool
+#### Implemented Phases
+
+1. ✅ **Phase 1**: Schema export tool (Implemented)
    ```bash
    pocketbase export-schema --format postgres > schema.sql
    ```
 
-2. **Phase 2**: Data migration tool
+2. ✅ **Phase 2**: Migration planning tool (Implemented)
+   ```bash
+   pocketbase migration-plan --target postgres -o migration/
+   # Generates:
+   #   migration/schema.sql   - PostgreSQL schema
+   #   migration/data.sql     - INSERT statements  
+   #   migration/WARNINGS.md  - Migration warnings
+   ```
+
+#### Remaining Phases
+
+3. 🔲 **Phase 3**: PostgreSQL connection implementation
+   - Implement `PostgreSQLDBConnect` function
+   - Add PostgreSQL driver support
+   - Handle connection pooling
+
+4. 🔲 **Phase 4**: Data migration tool
    ```bash
    pocketbase migrate sqlite-to-postgres \
      --source ./pb_data/data.db \
      --target postgres://user:pass@localhost/dbname
    ```
 
-3. **Phase 3**: Hybrid mode (read from SQLite, write to both)
-4. **Phase 4**: Switch to PostgreSQL-only
+5. 🔲 **Phase 5**: Hybrid mode (read from SQLite, write to both)
+6. 🔲 **Phase 6**: Full PostgreSQL operation
 
 ## Risks & Trade-offs
 

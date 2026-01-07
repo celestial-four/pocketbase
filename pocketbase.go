@@ -192,6 +192,8 @@ func (pb *PocketBase) Start() error {
 	// register system commands
 	pb.RootCmd.AddCommand(cmd.NewSuperuserCommand(pb))
 	pb.RootCmd.AddCommand(cmd.NewServeCommand(pb, !pb.hideStartBanner))
+	pb.RootCmd.AddCommand(cmd.NewExportSchemaCommand(pb))
+	pb.RootCmd.AddCommand(cmd.NewMigrationPlanCommand(pb))
 
 	return pb.Execute()
 }
