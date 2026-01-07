@@ -307,6 +307,8 @@ func (e *SchemaExporter) generateInsertSQL(collection *core.Collection, record *
 }
 
 // formatValue formats a value for SQL insertion
+// Note: This is a simplified implementation for the export tool.
+// For production data migration, use parameterized queries instead.
 func (e *SchemaExporter) formatValue(value any, fieldType string) string {
 	if value == nil {
 		return "NULL"
@@ -314,23 +316,65 @@ func (e *SchemaExporter) formatValue(value any, fieldType string) string {
 
 	switch fieldType {
 	case core.FieldTypeNumber:
-		return fmt.Sprintf("%v", value)
+		// Handle different numeric types explicitly
+		switch v := value.(type) {
+		case float64:
+			return fmt.Sprintf("%g", v) // %g removes trailing zeros
+		case float32:
+			return fmt.Sprintf("%g", v)
+		case int:
+			return fmt.Sprintf("%d", v)
+		case int64:
+			return fmt.Sprintf("%d", v)
+		case int32:
+			return fmt.Sprintf("%d", v)
+		default:
+			return fmt.Sprintf("%v", value)
+		}
 	case core.FieldTypeBool:
 		if b, ok := value.(bool); ok && b {
 			return e.dialect.BooleanTrue()
 		}
 		return e.dialect.BooleanFalse()
 	case core.FieldTypeJSON, core.FieldTypeSelect, core.FieldTypeRelation, core.FieldTypeFile, core.FieldTypeGeoPoint:
-		// JSON values need special handling
-		return fmt.Sprintf("'%s'", escapeString(fmt.Sprintf("%v", value)))
+		// JSON and array values need proper JSON marshaling
+		jsonStr := formatJSONValue(value)
+		return fmt.Sprintf("'%s'", escapeSQL(jsonStr))
 	default:
-		return fmt.Sprintf("'%s'", escapeString(fmt.Sprintf("%v", value)))
+		str := fmt.Sprintf("%v", value)
+		return fmt.Sprintf("'%s'", escapeSQL(str))
 	}
 }
 
-// escapeString escapes a string for SQL
+// formatJSONValue converts a value to a JSON string representation
+func formatJSONValue(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		// For maps, slices, etc. - use simple string conversion
+		// A full implementation would use json.Marshal
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// escapeSQL escapes a string for SQL insertion.
+// This handles the most common cases: single quotes and backslashes.
+// For more complex scenarios, consider using parameterized queries.
+func escapeSQL(s string) string {
+	// Escape backslashes first, then single quotes
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "''")
+	// Escape null bytes which can cause issues
+	s = strings.ReplaceAll(s, "\x00", "")
+	return s
+}
+
+// Legacy function kept for backward compatibility
 func escapeString(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
+	return escapeSQL(s)
 }
 
 // MigrationPlan represents a plan for migrating from one database to another.

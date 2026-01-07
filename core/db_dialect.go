@@ -372,15 +372,15 @@ func TranslateCreateTable(sql string, toDialect Dialect) string {
 
 	// Replace SQLite-specific default ID generation
 	sqliteIDDefault := `DEFAULT ('r'||lower(hex(randomblob(7))))`
-	result = strings.ReplaceAll(result, sqliteIDDefault, fmt.Sprintf("DEFAULT %s", toDialect.(*PostgreSQLDialect).RandomID()))
+	result = strings.ReplaceAll(result, sqliteIDDefault, fmt.Sprintf("DEFAULT %s", toDialect.RandomID()))
 
 	// Replace strftime for created/updated timestamps
 	sqliteStrftime := `DEFAULT (strftime('%Y-%m-%d %H:%M:%fZ'))`
-	result = strings.ReplaceAll(result, sqliteStrftime, fmt.Sprintf("DEFAULT %s", toDialect.(*PostgreSQLDialect).CurrentTimestamp()))
+	result = strings.ReplaceAll(result, sqliteStrftime, fmt.Sprintf("DEFAULT %s", toDialect.CurrentTimestamp()))
 
 	// Replace JSON type with JSONB for PostgreSQL
-	result = strings.ReplaceAll(result, " JSON ", " JSONB ")
-	result = strings.ReplaceAll(result, " JSON\n", " JSONB\n")
+	result = strings.ReplaceAll(result, " JSON ", fmt.Sprintf(" %s ", toDialect.JSONType()))
+	result = strings.ReplaceAll(result, " JSON\n", fmt.Sprintf(" %s\n", toDialect.JSONType()))
 
 	// Translate the general SQL patterns
 	result = toDialect.TranslateSQL(result)
