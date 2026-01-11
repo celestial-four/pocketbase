@@ -69,7 +69,6 @@ package main
 
 import (
     "log"
-    "github.com/pocketbase/pocketbase"
     "github.com/pocketbase/pocketbase/core"
 )
 
@@ -97,7 +96,7 @@ postgres://user:password@host:port/database?sslmode=disable
 # With SSL
 postgres://user:password@host:port/database?sslmode=require
 
-# Key-value format  
+# Key-value format
 host=localhost port=5432 user=user password=password dbname=pocketbase sslmode=disable
 ```
 
